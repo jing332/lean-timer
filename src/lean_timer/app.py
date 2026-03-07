@@ -3,10 +3,8 @@ from __future__ import annotations
 import math
 import time
 
-import cairo
 import gi
 
-gi.require_foreign("cairo")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Notify", "0.7")
