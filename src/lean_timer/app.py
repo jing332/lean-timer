@@ -6,6 +6,7 @@ import time
 import cairo
 import gi
 
+gi.require_foreign("cairo")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Notify", "0.7")
@@ -72,6 +73,23 @@ class MicroRestOverlay(Gtk.Window):
     @classmethod
     def _format_big_mmss(cls, seconds: int) -> str:
         return f'<span size="42000" weight="bold">{cls._format_mmss(seconds)}</span>'
+
+
+class DeepFocusSettingsDialog(Gtk.Window):
+    def __init__(self, parent: Gtk.Window) -> None:
+        super().__init__(transient_for=parent, modal=True)
+        self.set_title("深度专注参数")
+        self.set_default_size(360, 280)
+
+        frame = Gtk.Frame(label="深度专注参数")
+        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
+        grid.set_margin_top(12)
+        grid.set_margin_bottom(12)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        frame.set_child(grid)
+        self.set_child(frame)
+        self.grid = grid
 
 
 class CircularTimerFace(Gtk.Box):
@@ -166,6 +184,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         )
         self.alerts = AlertService(app_name="Lean Timer")
         self.overlay_window = MicroRestOverlay(app)
+        self.connect("close-request", self._on_close_request)
 
         self._build_ui()
         self._apply_window_preferences()
@@ -208,12 +227,13 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self.info_label = Gtk.Label(label="")
         self.info_label.set_wrap(True)
 
-        self.deep_focus_box = Gtk.Frame(label="深度专注参数")
-        grid = Gtk.Grid(column_spacing=8, row_spacing=8)
-        grid.set_margin_top(12)
-        grid.set_margin_bottom(12)
-        grid.set_margin_start(12)
-        grid.set_margin_end(12)
+        self.deep_focus_settings_btn = Gtk.Button(label="⚙ 参数设置")
+        self.deep_focus_settings_btn.set_halign(Gtk.Align.START)
+        self.deep_focus_settings_btn.connect("clicked", self._on_open_settings_dialog)
+
+        self.settings_dialog = DeepFocusSettingsDialog(self)
+        self.settings_dialog.connect("close-request", self._on_settings_dialog_close_request)
+        grid = self.settings_dialog.grid
 
         self.deep_focus_minutes_spin = self._make_spin(
             self.config.deep_focus_minutes,
@@ -294,7 +314,6 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self.reset_settings_btn = Gtk.Button(label="恢复默认参数")
         self.reset_settings_btn.connect("clicked", self._on_reset_settings)
         grid.attach(self.reset_settings_btn, 0, 5, 2, 1)
-        self.deep_focus_box.set_child(grid)
 
         controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.start_btn = Gtk.Button(label="开始")
@@ -313,7 +332,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         root.append(self.timer_face)
         root.append(self.phase_label)
         root.append(self.info_label)
-        root.append(self.deep_focus_box)
+        root.append(self.deep_focus_settings_btn)
         root.append(controls)
         self.set_child(root)
 
@@ -405,6 +424,14 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         )
         self._sync_deep_focus_controls()
 
+    def _on_open_settings_dialog(self, _btn: Gtk.Button) -> None:
+        self._sync_deep_focus_controls()
+        self.settings_dialog.present()
+
+    def _on_settings_dialog_close_request(self, _window: Gtk.Window) -> bool:
+        self.settings_dialog.hide()
+        return True
+
     def _on_start(self, _btn: Gtk.Button) -> None:
         self.engine.start(time.monotonic())
         self._refresh_ui()
@@ -417,10 +444,25 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self.engine.reset()
         self._refresh_ui()
 
+    def _on_close_request(self, _window: Gtk.Window) -> bool:
+        if self.overlay_window.is_visible():
+            self.overlay_window.hide()
+        self.overlay_window.close()
+        if self.settings_dialog.is_visible():
+            self.settings_dialog.hide()
+        self.settings_dialog.close()
+        app = self.get_application()
+        if app is not None:
+            app.quit()
+        return False
+
     def _refresh_ui(self) -> None:
         state = self.engine.get_display_state()
         self.status_label.set_label("运行中" if state.running else "已暂停")
-        self.deep_focus_box.set_visible(state.mode == TimerMode.DEEP_FOCUS)
+        is_deep_focus = state.mode == TimerMode.DEEP_FOCUS
+        self.deep_focus_settings_btn.set_visible(is_deep_focus)
+        if not is_deep_focus and self.settings_dialog.is_visible():
+            self.settings_dialog.hide()
         self.start_btn.set_sensitive(not state.running)
         self.pause_btn.set_sensitive(state.running)
 
