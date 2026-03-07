@@ -567,9 +567,10 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             state = self.engine.get_display_state()
             if state.phase == PomodoroPhase.FOCUS:
                 self.alerts.notify("番茄钟", f"第 {state.cycle_index} 轮专注开始")
+                self.alerts.play_start()
             else:
                 self.alerts.notify("番茄钟", "进入休息阶段")
-            self.alerts.beep()
+                self.alerts.beep()
 
         if events.get("random_prompt_hit"):
             self.alerts.notify(
@@ -588,7 +589,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
 
         if events.get("long_break_finished"):
             self.alerts.notify("深度专注", "长休息结束，开始下一轮专注")
-            self.alerts.beep()
+            self.alerts.play_start()
 
         self._refresh_ui()
         return True
@@ -649,6 +650,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
 
     def _on_start(self, _btn: Gtk.Button) -> None:
         self.engine.start(time.monotonic())
+        self.alerts.play_start()
         self._refresh_ui()
 
     def _on_pause(self, _btn: Gtk.Button) -> None:
