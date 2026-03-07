@@ -11,6 +11,11 @@ REQUIRED_APT_PACKAGES = (
     "gir1.2-notify-0.7",
 )
 
+TRAY_SUPPORT_NOTE = (
+    "Tray background mode uses StatusNotifierItem. On Ubuntu GNOME, install "
+    "gnome-shell-extension-appindicator if the tray icon does not appear."
+)
+
 
 def _has_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
@@ -33,7 +38,7 @@ def runtime_check(*, require_display: bool) -> tuple[bool, str]:
             False,
             "No graphical display session detected. Launch this app from the Ubuntu desktop session.",
         )
-    return True, "Runtime dependencies look available."
+    return True, f"Runtime dependencies look available.\n{TRAY_SUPPORT_NOTE}"
 
 
 def main(argv: list[str] | None = None) -> int:

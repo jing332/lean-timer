@@ -16,7 +16,9 @@ class AppConfig:
     random_prompt_min_minutes: int = 3
     random_prompt_max_minutes: int = 5
     micro_rest_seconds: int = 10
+    overlay_enabled: bool = True
     window_always_on_top: bool = True
+    close_to_tray: bool = True
 
 
 def _config_path() -> Path:
@@ -51,7 +53,9 @@ def load_config() -> AppConfig:
             int(raw.get("random_prompt_max_minutes", 5)),
         ),
         micro_rest_seconds=max(1, int(raw.get("micro_rest_seconds", 10))),
+        overlay_enabled=bool(raw.get("overlay_enabled", True)),
         window_always_on_top=bool(raw.get("window_always_on_top", True)),
+        close_to_tray=bool(raw.get("close_to_tray", True)),
     )
 
 
@@ -66,7 +70,9 @@ def save_config(config: AppConfig) -> None:
         "random_prompt_min_minutes": config.random_prompt_min_minutes,
         "random_prompt_max_minutes": config.random_prompt_max_minutes,
         "micro_rest_seconds": config.micro_rest_seconds,
+        "overlay_enabled": config.overlay_enabled,
         "window_always_on_top": config.window_always_on_top,
+        "close_to_tray": config.close_to_tray,
     }
     _config_path().write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

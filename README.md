@@ -5,12 +5,19 @@
 - 番茄钟（专注/休息循环）
 - 深度专注（90/20 节律，可调随机提示音）
 - 里程碑系统通知与提示音
+- 关闭窗口后收起到系统托盘，继续在后台计时
 
 ## 运行环境
 
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-notify-0.7
+```
+
+如果你使用 Ubuntu 默认 GNOME 桌面，并希望看到系统托盘图标，还需要安装：
+
+```bash
+sudo apt install -y gnome-shell-extension-appindicator
 ```
 
 ## 启动
@@ -23,6 +30,11 @@ sudo apt install -y python3 python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-notify
 - 专注阶段默认 90 分钟，长休息默认 20 分钟
 - 专注中默认每 3 到 5 分钟随机响一次提示音
 - 听到提示音后会弹出 10 秒休息遮罩，结束后自动恢复
+
+托盘后台运行说明：
+- 点击窗口右上角关闭按钮，或点击“收起到托盘”，程序会继续在后台运行
+- 左键点击托盘图标可显示/收起主窗口
+- 右键菜单可显示主窗口或直接退出程序
 
 ## 自检
 
