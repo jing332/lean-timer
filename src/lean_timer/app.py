@@ -26,16 +26,30 @@ from lean_timer.timer_engine import (
 
 class MicroRestOverlay(Gtk.Window):
     def __init__(self, app: Gtk.Application) -> None:
-        super().__init__(application=app, modal=True)
+        super().__init__(application=app)
         self.set_title("闭眼休息")
         if hasattr(self, "set_decorated"):
             self.set_decorated(False)
         if hasattr(self, "set_opacity"):
             self.set_opacity(0.75)
+        if hasattr(self, "set_modal"):
+            self.set_modal(False)
         if hasattr(self, "set_resizable"):
             self.set_resizable(False)
         if hasattr(self, "set_can_focus"):
             self.set_can_focus(True)
+        if hasattr(self, "set_can_target"):
+            self.set_can_target(True)
+        if hasattr(self, "set_hide_on_close"):
+            self.set_hide_on_close(True)
+        if hasattr(self, "set_focusable"):
+            self.set_focusable(True)
+        if hasattr(self, "set_can_default"):
+            self.set_can_default(True)
+        if hasattr(self, "set_default_size"):
+            self.set_default_size(1920, 1080)
+        if hasattr(self, "set_keep_above"):
+            self.set_keep_above(True)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_valign(Gtk.Align.CENTER)
@@ -59,15 +73,15 @@ class MicroRestOverlay(Gtk.Window):
 
     def show_countdown(self, seconds: int, parent: Gtk.Window) -> None:
         self.countdown_label.set_markup(self._format_big_mmss(seconds))
-        self.set_transient_for(parent)
-        self.set_modal(True)
-        if hasattr(self, "fullscreen"):
-            self.fullscreen()
+        if hasattr(self, "set_transient_for"):
+            self.set_transient_for(None)
+        if hasattr(self, "set_modal"):
+            self.set_modal(False)
+        self.present()
         if hasattr(self, "set_fullscreened"):
             self.set_fullscreened(True)
         if hasattr(self, "fullscreen"):
             self.fullscreen()
-        self.present()
 
     def update_countdown(self, seconds: int) -> None:
         self.countdown_label.set_markup(self._format_big_mmss(seconds))
@@ -578,6 +592,10 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
                 f"闭上眼睛休息 {self.config.micro_rest_seconds} 秒",
             )
             self.alerts.beep()
+
+        if events.get("micro_rest_finished"):
+            self.alerts.notify("深度专注", "微休息结束，恢复专注")
+            self.alerts.play_start()
 
         if events.get("long_break_started"):
             self.alerts.notify(
