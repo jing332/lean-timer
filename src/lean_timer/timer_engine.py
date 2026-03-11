@@ -49,6 +49,7 @@ class TimerEngine:
         milestones_minutes: Iterable[int] = (30, 60, 90),
         deep_focus_minutes: int = 90,
         deep_break_minutes: int = 20,
+        deep_focus_auto_continue: bool = False,
         random_prompt_min_minutes: int = 3,
         random_prompt_max_minutes: int = 5,
         micro_rest_seconds: int = 10,
@@ -60,6 +61,7 @@ class TimerEngine:
         self.milestones_seconds = sorted({max(1, m) * 60 for m in milestones_minutes})
         self.deep_focus_seconds = max(1, deep_focus_minutes) * 60
         self.deep_break_seconds = max(1, deep_break_minutes) * 60
+        self.deep_focus_auto_continue = deep_focus_auto_continue
         self.random_prompt_min_seconds = max(1, random_prompt_min_minutes) * 60
         self.random_prompt_max_seconds = max(
             self.random_prompt_min_seconds,
@@ -124,12 +126,14 @@ class TimerEngine:
         *,
         deep_focus_minutes: int,
         deep_break_minutes: int,
+        deep_focus_auto_continue: bool,
         random_prompt_min_minutes: int,
         random_prompt_max_minutes: int,
         micro_rest_seconds: int,
     ) -> None:
         self.deep_focus_seconds = max(1, deep_focus_minutes) * 60
         self.deep_break_seconds = max(1, deep_break_minutes) * 60
+        self.deep_focus_auto_continue = deep_focus_auto_continue
         self.random_prompt_min_seconds = max(1, random_prompt_min_minutes) * 60
         self.random_prompt_max_seconds = max(
             self.random_prompt_min_seconds,
@@ -315,11 +319,17 @@ class TimerEngine:
             delta -= step
 
         if self._deep_phase_elapsed >= self.deep_break_seconds:
-            self._cycle_index += 1
             self._deep_phase = DeepFocusPhase.FOCUS
             self._deep_focus_elapsed = 0.0
             self._deep_phase_elapsed = 0.0
-            self._schedule_next_prompt()
+            if self.deep_focus_auto_continue:
+                self._cycle_index += 1
+                self._schedule_next_prompt()
+            else:
+                self._running = False
+                self._last_monotonic = None
+                self._next_prompt_at_focus_elapsed = None
+                self._cycle_index = 1
             events["long_break_finished"] = True
         return delta
 

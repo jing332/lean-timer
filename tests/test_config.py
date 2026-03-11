@@ -12,8 +12,12 @@ def test_load_config_creates_default_close_to_tray(tmp_path, monkeypatch) -> Non
     config = load_config()
 
     assert config.close_to_tray is True
+    assert config.deep_focus_auto_continue is False
+    assert config.prompt_window_always_on_top is True
     payload = json.loads((tmp_path / ".config" / "lean-timer" / "config.json").read_text())
     assert payload["close_to_tray"] is True
+    assert payload["deep_focus_auto_continue"] is False
+    assert payload["prompt_window_always_on_top"] is True
 
 
 def test_load_config_reads_close_to_tray_false(tmp_path, monkeypatch) -> None:
@@ -29,11 +33,13 @@ def test_load_config_reads_close_to_tray_false(tmp_path, monkeypatch) -> None:
                 "milestones_minutes": [30, 60, 90],
                 "deep_focus_minutes": 90,
                 "deep_break_minutes": 20,
+                "deep_focus_auto_continue": True,
                 "random_prompt_min_minutes": 3,
                 "random_prompt_max_minutes": 5,
                 "micro_rest_seconds": 10,
                 "overlay_enabled": True,
                 "window_always_on_top": True,
+                "prompt_window_always_on_top": False,
                 "close_to_tray": False,
             }
         ),
@@ -43,6 +49,8 @@ def test_load_config_reads_close_to_tray_false(tmp_path, monkeypatch) -> None:
     config = load_config()
 
     assert config.close_to_tray is False
+    assert config.deep_focus_auto_continue is True
+    assert config.prompt_window_always_on_top is False
 
 
 def test_runtime_check_reports_tray_support_hint(monkeypatch) -> None:

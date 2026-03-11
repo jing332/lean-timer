@@ -48,8 +48,9 @@ class MicroRestOverlay(Gtk.Window):
             self.set_can_default(True)
         if hasattr(self, "set_default_size"):
             self.set_default_size(1920, 1080)
+        self._always_on_top = True
         if hasattr(self, "set_keep_above"):
-            self.set_keep_above(True)
+            self.set_keep_above(self._always_on_top)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_valign(Gtk.Align.CENTER)
@@ -77,6 +78,8 @@ class MicroRestOverlay(Gtk.Window):
             self.set_transient_for(None)
         if hasattr(self, "set_modal"):
             self.set_modal(False)
+        if hasattr(self, "set_keep_above"):
+            self.set_keep_above(self._always_on_top)
         self.present()
         if hasattr(self, "set_fullscreened"):
             self.set_fullscreened(True)
@@ -96,6 +99,11 @@ class MicroRestOverlay(Gtk.Window):
     def _format_big_mmss(cls, seconds: int) -> str:
         return f'<span size="42000" weight="bold">{cls._format_mmss(seconds)}</span>'
 
+    def set_prompt_always_on_top(self, enabled: bool) -> None:
+        self._always_on_top = enabled
+        if hasattr(self, "set_keep_above"):
+            self.set_keep_above(enabled)
+
 
 class MicroRestPrompt(Gtk.Window):
     def __init__(self, app: Gtk.Application) -> None:
@@ -110,6 +118,7 @@ class MicroRestPrompt(Gtk.Window):
             self.set_resizable(False)
         if hasattr(self, "set_opacity"):
             self.set_opacity(0.94)
+        self._always_on_top = True
 
         frame = Gtk.Frame()
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -141,8 +150,14 @@ class MicroRestPrompt(Gtk.Window):
         self.update_countdown(seconds)
         self.set_transient_for(parent)
         if hasattr(self, "set_keep_above"):
-            self.set_keep_above(True)
-        self.present()
+            self.set_keep_above(self._always_on_top)
+        if hasattr(self, "set_can_focus"):
+            self.set_can_focus(False)
+        if hasattr(self, "set_focusable"):
+            self.set_focusable(False)
+        if hasattr(self, "set_can_target"):
+            self.set_can_target(False)
+        self.show()
 
     def update_countdown(self, seconds: int) -> None:
         text = self._format_mmss(seconds)
@@ -153,6 +168,11 @@ class MicroRestPrompt(Gtk.Window):
         minutes = seconds // 60
         remain = seconds % 60
         return f"{minutes:02d}:{remain:02d}"
+
+    def set_prompt_always_on_top(self, enabled: bool) -> None:
+        self._always_on_top = enabled
+        if hasattr(self, "set_keep_above"):
+            self.set_keep_above(enabled)
 
 
 class DeepFocusSettingsDialog(Gtk.Window):
@@ -349,6 +369,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             milestones_minutes=self.config.milestones_minutes,
             deep_focus_minutes=self.config.deep_focus_minutes,
             deep_break_minutes=self.config.deep_break_minutes,
+            deep_focus_auto_continue=self.config.deep_focus_auto_continue,
             random_prompt_min_minutes=self.config.random_prompt_min_minutes,
             random_prompt_max_minutes=self.config.random_prompt_max_minutes,
             micro_rest_seconds=self.config.micro_rest_seconds,
@@ -490,11 +511,33 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             2,
             1,
         )
+        self.deep_focus_auto_continue_check = Gtk.CheckButton(
+            label=(
+                "长休息结束后自动进入下一轮专注 "
+                f"(默认 {'开' if self.default_config.deep_focus_auto_continue else '关'})"
+            )
+        )
+        self.deep_focus_auto_continue_check.connect(
+            "toggled",
+            self._on_deep_focus_auto_continue_toggled,
+        )
+        grid.attach(self.deep_focus_auto_continue_check, 0, 5, 2, 1)
         self.overlay_enabled_check = Gtk.CheckButton(
             label=f"启用全屏遮罩 (默认 {'开' if self.default_config.overlay_enabled else '关'})"
         )
         self.overlay_enabled_check.connect("toggled", self._on_overlay_enabled_toggled)
-        grid.attach(self.overlay_enabled_check, 0, 5, 2, 1)
+        grid.attach(self.overlay_enabled_check, 0, 6, 2, 1)
+        self.prompt_window_always_on_top_check = Gtk.CheckButton(
+            label=(
+                "提示时窗口置顶 "
+                f"(默认 {'开' if self.default_config.prompt_window_always_on_top else '关'})"
+            )
+        )
+        self.prompt_window_always_on_top_check.connect(
+            "toggled",
+            self._on_prompt_window_always_on_top_toggled,
+        )
+        grid.attach(self.prompt_window_always_on_top_check, 0, 7, 2, 1)
         self.close_to_tray_check = Gtk.CheckButton(
             label=(
                 "点击关闭按钮时收起到托盘 "
@@ -502,10 +545,10 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             )
         )
         self.close_to_tray_check.connect("toggled", self._on_close_to_tray_toggled)
-        grid.attach(self.close_to_tray_check, 0, 6, 2, 1)
+        grid.attach(self.close_to_tray_check, 0, 8, 2, 1)
         self.reset_settings_btn = Gtk.Button(label="恢复默认参数")
         self.reset_settings_btn.connect("clicked", self._on_reset_settings)
-        grid.attach(self.reset_settings_btn, 0, 7, 2, 1)
+        grid.attach(self.reset_settings_btn, 0, 9, 2, 1)
 
         controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.start_btn = Gtk.Button(label="开始")
@@ -562,12 +605,24 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self._set_spin_value(self.deep_break_minutes_spin, self.config.deep_break_minutes)
         self._set_spin_value(self.random_prompt_min_spin, self.config.random_prompt_min_minutes)
         self._set_spin_value(self.random_prompt_max_spin, self.config.random_prompt_max_minutes)
+        self.deep_focus_auto_continue_check.set_active(
+            self.config.deep_focus_auto_continue
+        )
         self.overlay_enabled_check.set_active(self.config.overlay_enabled)
+        self.prompt_window_always_on_top_check.set_active(
+            self.config.prompt_window_always_on_top
+        )
         self.close_to_tray_check.set_active(self.config.close_to_tray)
 
     def _apply_window_preferences(self) -> None:
         if self.config.window_always_on_top and hasattr(self, "set_keep_above"):
             self.set_keep_above(True)
+        self.overlay_window.set_prompt_always_on_top(
+            self.config.prompt_window_always_on_top
+        )
+        self.prompt_window.set_prompt_always_on_top(
+            self.config.prompt_window_always_on_top
+        )
 
     def _on_tick(self) -> bool:
         events = self.engine.tick(time.monotonic())
@@ -606,8 +661,12 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self.alerts.beep()
 
         if events.get("long_break_finished"):
-            self.alerts.notify("深度专注", "长休息结束，开始下一轮专注")
-            self.alerts.play_start()
+            if self.config.deep_focus_auto_continue:
+                self.alerts.notify("深度专注", "长休息结束，开始下一轮专注")
+                self.alerts.play_start()
+            else:
+                self.alerts.notify("深度专注", "长休息结束，本轮已完成")
+                self.alerts.beep()
 
         self._refresh_ui()
         return True
@@ -641,9 +700,23 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             random_prompt_min_minutes=self.default_config.random_prompt_min_minutes,
             random_prompt_max_minutes=self.default_config.random_prompt_max_minutes,
         )
+        self.config.deep_focus_auto_continue = (
+            self.default_config.deep_focus_auto_continue
+        )
         self.config.overlay_enabled = self.default_config.overlay_enabled
+        self.config.prompt_window_always_on_top = (
+            self.default_config.prompt_window_always_on_top
+        )
         self.config.close_to_tray = self.default_config.close_to_tray
         save_config(self.config)
+        self.engine.update_deep_focus_settings(
+            deep_focus_minutes=self.config.deep_focus_minutes,
+            deep_break_minutes=self.config.deep_break_minutes,
+            deep_focus_auto_continue=self.config.deep_focus_auto_continue,
+            random_prompt_min_minutes=self.config.random_prompt_min_minutes,
+            random_prompt_max_minutes=self.config.random_prompt_max_minutes,
+            micro_rest_seconds=self.config.micro_rest_seconds,
+        )
         self._sync_deep_focus_controls()
 
     def _on_open_settings_dialog(self, _btn: Gtk.Button) -> None:
@@ -661,6 +734,36 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         save_config(self.config)
         if not self.config.overlay_enabled:
             self._hide_overlay()
+
+    def _on_deep_focus_auto_continue_toggled(self, _btn: Gtk.CheckButton) -> None:
+        self.config.deep_focus_auto_continue = (
+            self.deep_focus_auto_continue_check.get_active()
+        )
+        save_config(self.config)
+        self.engine.update_deep_focus_settings(
+            deep_focus_minutes=self.config.deep_focus_minutes,
+            deep_break_minutes=self.config.deep_break_minutes,
+            deep_focus_auto_continue=self.config.deep_focus_auto_continue,
+            random_prompt_min_minutes=self.config.random_prompt_min_minutes,
+            random_prompt_max_minutes=self.config.random_prompt_max_minutes,
+            micro_rest_seconds=self.config.micro_rest_seconds,
+        )
+        self._refresh_ui()
+
+    def _on_prompt_window_always_on_top_toggled(
+        self,
+        _btn: Gtk.CheckButton,
+    ) -> None:
+        self.config.prompt_window_always_on_top = (
+            self.prompt_window_always_on_top_check.get_active()
+        )
+        save_config(self.config)
+        self.overlay_window.set_prompt_always_on_top(
+            self.config.prompt_window_always_on_top
+        )
+        self.prompt_window.set_prompt_always_on_top(
+            self.config.prompt_window_always_on_top
+        )
 
     def _on_close_to_tray_toggled(self, _btn: Gtk.CheckButton) -> None:
         self.config.close_to_tray = self.close_to_tray_check.get_active()
@@ -797,7 +900,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
                 accent=(0.84, 0.32, 0.29),
             )
             self.phase_label.set_markup(
-                f'模式: 深度专注 | 第 <span foreground="#E91E63" weight="bold">{deep_state.cycle_index}</span> 轮 | 本轮剩余: '
+                '模式: 深度专注 | 本轮剩余: '
                 f"{TimerEngine.format_hhmmss(deep_state.phase_remaining_seconds or 0)}"
             )
             self.info_label.set_label(
@@ -830,7 +933,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             accent=(0.38, 0.70, 0.82),
         )
         self.phase_label.set_markup(
-            f'模式: 深度专注 | 第 <span foreground="#E91E63" weight="bold">{deep_state.cycle_index}</span> 轮长休息'
+            "模式: 深度专注 | 长休息"
         )
         self.info_label.set_label(
             f"{self.config.deep_break_minutes} 分钟长休息中，随机提示音已暂停"
@@ -887,6 +990,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self.engine.update_deep_focus_settings(
             deep_focus_minutes=self.config.deep_focus_minutes,
             deep_break_minutes=self.config.deep_break_minutes,
+            deep_focus_auto_continue=self.config.deep_focus_auto_continue,
             random_prompt_min_minutes=self.config.random_prompt_min_minutes,
             random_prompt_max_minutes=self.config.random_prompt_max_minutes,
             micro_rest_seconds=self.config.micro_rest_seconds,

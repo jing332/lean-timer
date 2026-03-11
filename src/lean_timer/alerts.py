@@ -7,6 +7,9 @@ from pathlib import Path
 from gi.repository import Notify
 
 
+NOTIFICATION_TIMEOUT_MS = 3000
+
+
 class AlertService:
     def __init__(self, app_name: str = "Lean Timer") -> None:
         self._notify_ready = Notify.init(app_name)
@@ -17,11 +20,15 @@ class AlertService:
     def notify(self, title: str, body: str) -> None:
         if self._notify_ready:
             n = Notify.Notification.new(title, body, None)
+            n.set_timeout(NOTIFICATION_TIMEOUT_MS)
             n.show()
             return
         notify_send = shutil.which("notify-send")
         if notify_send:
-            subprocess.run([notify_send, title, body], check=False)
+            subprocess.run(
+                [notify_send, "-t", str(NOTIFICATION_TIMEOUT_MS), title, body],
+                check=False,
+            )
 
     def beep(self) -> None:
         self._play_sound(self._complete_sound_path)

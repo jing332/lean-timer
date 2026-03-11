@@ -90,7 +90,7 @@ def test_deep_focus_micro_rest_returns_to_focus_and_reschedules() -> None:
     assert state.next_prompt_in_seconds == 180
 
 
-def test_deep_focus_reaches_long_break_and_back_to_focus() -> None:
+def test_deep_focus_reaches_long_break_and_stops_after_break() -> None:
     engine = TimerEngine(
         mode=TimerMode.DEEP_FOCUS,
         deep_focus_minutes=1,
@@ -111,7 +111,33 @@ def test_deep_focus_reaches_long_break_and_back_to_focus() -> None:
     state2 = engine.get_display_state()
     assert events2.get("long_break_finished") is True
     assert state2.phase == DeepFocusPhase.FOCUS
-    assert state2.cycle_index == 2
+    assert state2.running is False
+    assert state2.cycle_index == 1
+    assert state2.phase_remaining_seconds == 60
+
+
+def test_deep_focus_auto_continue_starts_next_round_after_break() -> None:
+    engine = TimerEngine(
+        mode=TimerMode.DEEP_FOCUS,
+        deep_focus_minutes=1,
+        deep_break_minutes=1,
+        deep_focus_auto_continue=True,
+        random_prompt_min_minutes=10,
+        random_prompt_max_minutes=10,
+        micro_rest_seconds=10,
+        randrange_inclusive=constant_random,
+    )
+
+    engine.start(0.0)
+    engine.tick(60.0)
+    events = engine.tick(120.0)
+    state = engine.get_display_state()
+
+    assert events.get("long_break_finished") is True
+    assert state.phase == DeepFocusPhase.FOCUS
+    assert state.running is True
+    assert state.cycle_index == 2
+    assert state.phase_remaining_seconds == 60
 
 
 def test_deep_focus_pause_resume_keeps_prompt_schedule() -> None:

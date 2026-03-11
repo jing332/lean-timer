@@ -47,6 +47,20 @@ sudo apt install -y python3-pytest
 ./scripts/run.sh
 ```
 
+## 安装到 /opt
+
+如果你想把源码安装到 `/opt/lean-timer`，并在系统应用菜单中创建启动项：
+
+```bash
+./scripts/install.sh
+```
+
+这个脚本会：
+
+- 复制当前源码到 `/opt/lean-timer`
+- 创建 `/usr/share/applications/lean-timer.desktop`
+- 让应用菜单里的启动项指向 `/opt/lean-timer/scripts/run.sh`
+
 `run.sh` 会自动：
 
 - 选择可用的 Python 解释器
@@ -122,4 +136,3 @@ PYTHONPATH=src python3 -m pytest tests/test_timer_engine.py::test_countup_pause_
 
 - 开始计时 / 恢复到学习状态时播放 `start.oga`
 - 普通提示播放 `complete.oga`
-
