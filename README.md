@@ -1,12 +1,20 @@
 # Lean Timer
 
-Lean Timer 是一个面向 Ubuntu 桌面的 GTK4 学习计时器，支持：
+Lean Timer 是一个面向 Ubuntu 桌面的 GTK4 学习计时器，使用 Codex + GLM5 完成，支持：
 
 - 正计时
 - 番茄钟
 - 深度专注
 - 系统通知与提示音
 - 托盘后台运行
+
+## 界面预览
+
+<details>
+<summary>点击展开主界面截图</summary>
+
+![Lean Timer 主界面](imgs/main.png)
+</details>
 
 ## 环境要求
 
