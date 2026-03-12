@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import signal
 import time
 from typing import Callable
 
@@ -13,6 +14,7 @@ gi.require_version("Notify", "0.7")
 from gi.repository import Gdk, Gio, GLib, Gtk
 
 from lean_timer.alerts import AlertService
+from lean_timer.audio_focus import AudioFocusController
 from lean_timer.config import AppConfig, load_config, save_config
 from lean_timer.tray import TrayIcon, TrayMenuItem
 from lean_timer.timer_engine import (
@@ -375,6 +377,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             micro_rest_seconds=self.config.micro_rest_seconds,
         )
         self.alerts = AlertService(app_name="Lean Timer")
+        self.audio_focus = AudioFocusController()
         self.overlay_window = MicroRestOverlay(app)
         self.prompt_window = MicroRestPrompt(app)
         self.running_timer_close_dialog = RunningTimerCloseDialog(
@@ -527,6 +530,17 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         )
         self.overlay_enabled_check.connect("toggled", self._on_overlay_enabled_toggled)
         grid.attach(self.overlay_enabled_check, 0, 6, 2, 1)
+        self.notifications_enabled_check = Gtk.CheckButton(
+            label=(
+                "启用系统通知 "
+                f"(默认 {'开' if self.default_config.notifications_enabled else '关'})"
+            )
+        )
+        self.notifications_enabled_check.connect(
+            "toggled",
+            self._on_notifications_enabled_toggled,
+        )
+        grid.attach(self.notifications_enabled_check, 0, 7, 2, 1)
         self.prompt_window_always_on_top_check = Gtk.CheckButton(
             label=(
                 "提示时窗口置顶 "
@@ -537,7 +551,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             "toggled",
             self._on_prompt_window_always_on_top_toggled,
         )
-        grid.attach(self.prompt_window_always_on_top_check, 0, 7, 2, 1)
+        grid.attach(self.prompt_window_always_on_top_check, 0, 8, 2, 1)
         self.close_to_tray_check = Gtk.CheckButton(
             label=(
                 "点击关闭按钮时收起到托盘 "
@@ -545,12 +559,13 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             )
         )
         self.close_to_tray_check.connect("toggled", self._on_close_to_tray_toggled)
-        grid.attach(self.close_to_tray_check, 0, 8, 2, 1)
+        grid.attach(self.close_to_tray_check, 0, 9, 2, 1)
         self.reset_settings_btn = Gtk.Button(label="恢复默认参数")
         self.reset_settings_btn.connect("clicked", self._on_reset_settings)
-        grid.attach(self.reset_settings_btn, 0, 9, 2, 1)
+        grid.attach(self.reset_settings_btn, 0, 10, 2, 1)
 
         controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        controls.set_halign(Gtk.Align.CENTER)
         self.start_btn = Gtk.Button(label="开始")
         self.pause_btn = Gtk.Button(label="暂停")
         self.reset_btn = Gtk.Button(label="重置")
@@ -609,6 +624,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self.config.deep_focus_auto_continue
         )
         self.overlay_enabled_check.set_active(self.config.overlay_enabled)
+        self.notifications_enabled_check.set_active(self.config.notifications_enabled)
         self.prompt_window_always_on_top_check.set_active(
             self.config.prompt_window_always_on_top
         )
@@ -629,31 +645,34 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         if "milestone_hit" in events:
             milestone = events["milestone_hit"]
             minute = int(milestone) if isinstance(milestone, (int, float, str)) else 0
-            self.alerts.notify("学习里程碑", f"已累计学习 {minute} 分钟")
+            self._notify("学习里程碑", f"已累计学习 {minute} 分钟")
             self.alerts.beep()
 
         if events.get("phase_changed"):
             state = self.engine.get_display_state()
             if state.phase == PomodoroPhase.FOCUS:
-                self.alerts.notify("番茄钟", f"第 {state.cycle_index} 轮专注开始")
+                self._notify("番茄钟", f"第 {state.cycle_index} 轮专注开始")
                 self.alerts.play_start()
             else:
-                self.alerts.notify("番茄钟", "进入休息阶段")
+                self._notify("番茄钟", "进入休息阶段")
                 self.alerts.beep()
 
         if events.get("random_prompt_hit"):
-            self.alerts.notify(
+            if self.config.overlay_enabled:
+                self.audio_focus.pause_active_players()
+            self._notify(
                 "深度专注",
                 f"闭上眼睛休息 {self.config.micro_rest_seconds} 秒",
             )
             self.alerts.beep()
 
         if events.get("micro_rest_finished"):
-            self.alerts.notify("深度专注", "微休息结束，恢复专注")
+            self.audio_focus.resume_paused_players()
+            self._notify("深度专注", "微休息结束，恢复专注")
             self.alerts.play_start()
 
         if events.get("long_break_started"):
-            self.alerts.notify(
+            self._notify(
                 "深度专注",
                 f"已专注 {self.config.deep_focus_minutes} 分钟，进入 "
                 f"{self.config.deep_break_minutes} 分钟长休息",
@@ -662,10 +681,10 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
 
         if events.get("long_break_finished"):
             if self.config.deep_focus_auto_continue:
-                self.alerts.notify("深度专注", "长休息结束，开始下一轮专注")
+                self._notify("深度专注", "长休息结束，开始下一轮专注")
                 self.alerts.play_start()
             else:
-                self.alerts.notify("深度专注", "长休息结束，本轮已完成")
+                self._notify("深度专注", "长休息结束，本轮已完成")
                 self.alerts.beep()
 
         self._refresh_ui()
@@ -674,6 +693,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
     def _on_mode_changed(self, _combo: Gtk.DropDown, _param: object) -> None:
         selected = self.mode_combo.get_selected()
         active_mode = self._index_to_mode(selected)
+        self.audio_focus.resume_paused_players()
         self.config.mode_default = active_mode.value
         save_config(self.config)
         self.engine.switch_mode(active_mode)
@@ -704,6 +724,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self.default_config.deep_focus_auto_continue
         )
         self.config.overlay_enabled = self.default_config.overlay_enabled
+        self.config.notifications_enabled = self.default_config.notifications_enabled
         self.config.prompt_window_always_on_top = (
             self.default_config.prompt_window_always_on_top
         )
@@ -734,6 +755,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         save_config(self.config)
         if not self.config.overlay_enabled:
             self._hide_overlay()
+            self._hide_micro_rest_prompt()
 
     def _on_deep_focus_auto_continue_toggled(self, _btn: Gtk.CheckButton) -> None:
         self.config.deep_focus_auto_continue = (
@@ -749,6 +771,12 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             micro_rest_seconds=self.config.micro_rest_seconds,
         )
         self._refresh_ui()
+
+    def _on_notifications_enabled_toggled(self, _btn: Gtk.CheckButton) -> None:
+        self.config.notifications_enabled = (
+            self.notifications_enabled_check.get_active()
+        )
+        save_config(self.config)
 
     def _on_prompt_window_always_on_top_toggled(
         self,
@@ -779,6 +807,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
         self._refresh_ui()
 
     def _on_reset(self, _btn: Gtk.Button) -> None:
+        self.audio_focus.resume_paused_players()
         self.engine.reset()
         self._refresh_ui()
 
@@ -792,6 +821,7 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self.running_timer_close_dialog.present()
             return True
         self._close_auxiliary_windows()
+        self.audio_focus.resume_paused_players()
         app = self.get_application()
         if app is not None:
             app.quit()
@@ -821,10 +851,16 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self.settings_dialog.hide()
         self.hide()
         if notify:
-            self.alerts.notify("学习时钟", "程序已收起到系统托盘，计时会继续进行")
+            self._notify("学习时钟", "程序已收起到系统托盘，计时会继续进行")
         return True
 
+    def _notify(self, title: str, body: str) -> None:
+        if not self.config.notifications_enabled:
+            return
+        self.alerts.notify(title, body)
+
     def _close_auxiliary_windows(self) -> None:
+        self.audio_focus.resume_paused_players()
         if self.overlay_window.is_visible():
             self.overlay_window.hide()
         if self.prompt_window.is_visible():
@@ -946,7 +982,8 @@ class LeanTimerWindow(Gtk.ApplicationWindow):
             self._hide_overlay()
             return
         if not self.config.overlay_enabled:
-            self._show_micro_rest_prompt(seconds)
+            self._hide_overlay()
+            self._hide_micro_rest_prompt()
             return
         self._hide_micro_rest_prompt()
         if not self.overlay_window.is_visible():
@@ -1094,9 +1131,11 @@ class LeanTimerApp(Gtk.Application):
         super().__init__(application_id="com.jing.lean_timer")
         self._window: LeanTimerWindow | None = None
         self._tray: TrayIcon | None = None
+        self._sigint_source_id = 0
 
     def do_startup(self) -> None:
         Gtk.Application.do_startup(self)
+        self._install_signal_handlers()
         self._add_action("show-window", self._on_show_window_action)
         self._add_action("hide-window", self._on_hide_window_action)
         self._add_action("quit", self._on_quit_action)
@@ -1109,6 +1148,11 @@ class LeanTimerApp(Gtk.Application):
         )
 
     def do_shutdown(self) -> None:
+        if self._sigint_source_id and GLib.MainContext.default().find_source_by_id(
+            self._sigint_source_id
+        ) is not None:
+            GLib.Source.remove(self._sigint_source_id)
+            self._sigint_source_id = 0
         if self._window is not None:
             self._window.allow_shutdown()
             self._window._close_auxiliary_windows()
@@ -1172,6 +1216,14 @@ class LeanTimerApp(Gtk.Application):
         action.connect("activate", callback)
         self.add_action(action)
 
+    def _install_signal_handlers(self) -> None:
+        if hasattr(GLib, "unix_signal_add"):
+            self._sigint_source_id = GLib.unix_signal_add(
+                GLib.PRIORITY_DEFAULT,
+                signal.SIGINT,
+                self._on_sigint,
+            )
+
     def _on_show_window_action(self, _action: Gio.SimpleAction, _param: GLib.Variant | None) -> None:
         self.show_main_window()
 
@@ -1180,6 +1232,11 @@ class LeanTimerApp(Gtk.Application):
 
     def _on_quit_action(self, _action: Gio.SimpleAction, _param: GLib.Variant | None) -> None:
         self.request_quit()
+
+    def _on_sigint(self) -> bool:
+        self._sigint_source_id = 0
+        self.request_quit()
+        return GLib.SOURCE_REMOVE
 
 
 def main() -> None:

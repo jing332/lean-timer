@@ -1,1 +1,1 @@
-__all__ = ["app", "timer_engine", "config", "alerts", "tray"]
+__all__ = ["app", "timer_engine", "config", "alerts", "audio_focus", "tray"]

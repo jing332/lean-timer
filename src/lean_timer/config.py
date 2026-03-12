@@ -18,6 +18,7 @@ class AppConfig:
     random_prompt_max_minutes: int = 5
     micro_rest_seconds: int = 10
     overlay_enabled: bool = True
+    notifications_enabled: bool = True
     window_always_on_top: bool = True
     prompt_window_always_on_top: bool = True
     close_to_tray: bool = True
@@ -57,6 +58,7 @@ def load_config() -> AppConfig:
         ),
         micro_rest_seconds=max(1, int(raw.get("micro_rest_seconds", 10))),
         overlay_enabled=bool(raw.get("overlay_enabled", True)),
+        notifications_enabled=bool(raw.get("notifications_enabled", True)),
         window_always_on_top=bool(raw.get("window_always_on_top", True)),
         prompt_window_always_on_top=bool(raw.get("prompt_window_always_on_top", True)),
         close_to_tray=bool(raw.get("close_to_tray", True)),
@@ -76,6 +78,7 @@ def save_config(config: AppConfig) -> None:
         "random_prompt_max_minutes": config.random_prompt_max_minutes,
         "micro_rest_seconds": config.micro_rest_seconds,
         "overlay_enabled": config.overlay_enabled,
+        "notifications_enabled": config.notifications_enabled,
         "window_always_on_top": config.window_always_on_top,
         "prompt_window_always_on_top": config.prompt_window_always_on_top,
         "close_to_tray": config.close_to_tray,

@@ -13,10 +13,12 @@ def test_load_config_creates_default_close_to_tray(tmp_path, monkeypatch) -> Non
 
     assert config.close_to_tray is True
     assert config.deep_focus_auto_continue is False
+    assert config.notifications_enabled is True
     assert config.prompt_window_always_on_top is True
     payload = json.loads((tmp_path / ".config" / "lean-timer" / "config.json").read_text())
     assert payload["close_to_tray"] is True
     assert payload["deep_focus_auto_continue"] is False
+    assert payload["notifications_enabled"] is True
     assert payload["prompt_window_always_on_top"] is True
 
 
@@ -38,6 +40,7 @@ def test_load_config_reads_close_to_tray_false(tmp_path, monkeypatch) -> None:
                 "random_prompt_max_minutes": 5,
                 "micro_rest_seconds": 10,
                 "overlay_enabled": True,
+                "notifications_enabled": False,
                 "window_always_on_top": True,
                 "prompt_window_always_on_top": False,
                 "close_to_tray": False,
@@ -50,6 +53,7 @@ def test_load_config_reads_close_to_tray_false(tmp_path, monkeypatch) -> None:
 
     assert config.close_to_tray is False
     assert config.deep_focus_auto_continue is True
+    assert config.notifications_enabled is False
     assert config.prompt_window_always_on_top is False
 
 
